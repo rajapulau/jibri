@@ -21,6 +21,9 @@ import com.fasterxml.jackson.annotation.JsonAnyGetter
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jitsi.jibri.capture.ffmpeg.FfmpegCapturer
 import org.jitsi.jibri.config.Config
 import org.jitsi.jibri.config.XmppCredentials
@@ -40,6 +43,8 @@ import org.jitsi.jibri.util.createIfDoesNotExist
 import org.jitsi.jibri.util.whenever
 import org.jitsi.metaconfig.config
 import org.jitsi.xmpp.extensions.jibri.JibriIq
+import org.json.simple.JSONObject
+import java.io.IOException
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -135,6 +140,9 @@ class FileRecordingJibriService(
             fileRecordingParams.callParams.callUrlInfo.callName
         )
 
+//        saveData(fileRecordingParams.callParams.callUrlInfo.callUrl.split("/")[3],
+//                fileRecordingParams.callParams.callUrlInfo.callUrl.substringAfterLast("/"),
+//                sink.path)
         registerSubComponent(JibriSelenium.COMPONENT_ID, this.jibriSelenium)
         registerSubComponent(FfmpegCapturer.COMPONENT_ID, this.capturer)
     }
@@ -203,6 +211,31 @@ class FileRecordingJibriService(
         jibriSelenium.leaveCallAndQuitBrowser()
         logger.info("Finalizing the recording")
         finalize()
+    }
+
+    private fun saveData(code: String, roomName: String, path: String) {
+        var url = "https://meetstage.qiscus.com:9090/recordings"
+
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val jsonObject = JSONObject()
+        jsonObject.put("path", path)
+        jsonObject.put("code", code)
+        jsonObject.put("room_name", roomName)
+
+        val body = jsonObject.toString().toRequestBody(mediaType)
+        var request = Request.Builder().url(url)
+                .post(body)
+                .build()
+        var client = OkHttpClient()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                println("Success post to database : " + response.body?.string())
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                println("Failed post to database :" + e.message.toString())
+            }
+        })
     }
 
     /**
